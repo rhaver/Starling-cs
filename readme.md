@@ -38,3 +38,5 @@ The source code is written in C# and included as a Microsoft Visual C# Express&n
 
 ### <a name="binary"></a>Windows executable
 A windows executable can be found [here](Visual%20C%23%20Express%202010%20code%2FStarlingDBF%20Converter%2Fbin%2FRelease%2FStarlingDBF%20reader.exe).
+
+Note that upon opening a Starling database file, any unknown character that it comes across is reported in the log.
