@@ -28,6 +28,7 @@ A small tool to read and export the data contained within Starling databases is 
 * Open a Starling database (DBF) file
 * View its contents and its metadata (such as print settings) as Unicode text
 * Perform Unicode normalization
+* Get a count on the absolute frequency of all characters in the database
 * Correct the nesting and/or replace the notation of markup tags
 * Export as Unicode to a [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) file
 
