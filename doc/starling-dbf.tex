@@ -1,0 +1,451 @@
+%!TEX TS-program = xelatex
+%!TEX encoding = UTF-8 Unicode
+
+\documentclass[12pt]{article}
+
+\usepackage{fixltx2e}
+\usepackage{fontspec}
+\usepackage{xunicode,xltxtra}
+
+\defaultfontfeatures{Mapping=tex-text,Scale=MatchLowercase}
+
+\setmainfont{CMU Serif}
+\setsansfont{CMU Sans Serif}
+\setmonofont{Consolas}
+\newfontfamily\Arial{Arial}
+\newfontfamily\Galatia{Galatia SIL}
+\newfontfamily\DejaVuSans{DejaVu Sans}
+  
+% Normalise to NFC form, using precomposed characters where possible instead base characters with combining marks. (see XeTeX reference: [0: off; 1: NFC; 2: NFD])
+\XeTeXinputnormalization=1
+
+\usepackage[english]{babel}
+\usepackage[a4paper,margin=20mm]{geometry}
+\usepackage[numbers]{natbib}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{acronym}
+\usepackage[table]{xcolor}
+\usepackage{pdflscape}
+\usepackage{eqparbox}
+\usepackage{tikz}
+
+\usepackage{footmisc}
+\usepackage{verbatim}
+
+\pagestyle{plain}
+
+\let\oldcaption\caption
+\def\caption#1{\noindent\parbox{.8\linewidth}{\oldcaption{#1}}}
+\newcommand{\verticalcenter}[1]{\begin{minipage}[c][\textwidth][c]{\linewidth}\centering#1\end{minipage}}
+
+\newcommand{\secref}[1]{Sec.~\ref{#1}}
+\newcommand{\tblref}[1]{Table~\ref{#1}}
+\newcommand{\thead}[1]{\multicolumn{1}{c}{\textbf{#1}}}
+
+\newcommand{\dBaseIII}{\mbox{\emph{dBase~III}}}
+\newcommand{\Starling}{\emph{Starling}}
+\newcommand{\DBFViewer}{\emph{DBF Viewer 2000}}
+\newcommand{\fileext}[1]{\mbox{\texttt{.#1}}}
+\newcommand{\ASCII}{\textsc{ascii}}
+\newcommand{\CP}{\textsc{cp866}}
+\newcommand{\Brouwer}{prof.dr.~Andries Brouwer}
+\newcommand{\byte}[1]{\texttt{#1}}
+\newcommand{\menu}[1]{\raisebox{-3pt}[0pt][0pt]{\tikz\node[inner sep=3pt,outer sep=0pt,draw=black!20,fill=black!10,text depth=0pt]{\texttt{#1}};}}
+
+%% Character tables %%%%%%%%%%%%%%%%%
+\newcommand{\EncodingFont}{\Arial}
+\newcommand{\Greek}{\Galatia}
+\newcommand{\OCS}{\DejaVuSans}
+\newcommand{\unichar}[4]{\begin{tabular}[c]{@{}c@{}c}\\[-.9em]\EncodingFont#3\\{\tiny#4}\end{tabular}}
+\newcommand{\missingchar}{\phantom{\unichar{65}{41}{A}{0041}}}
+\newcommand{\combining}[2][\char"25CC]{\color{combining}#1#2}
+\newenvironment{charactertable}{\begin{table}[hpb]\centering\footnotesize}{\end{table}}
+
+\newsavebox{\tstretchbox}
+\newcolumntype{C}[1]{>{\begin{lrbox}{\tstretchbox}}l<{\end{lrbox}\eqmakebox[#1][c]{\unhcopy\tstretchbox}}}
+
+\definecolor{ascii}{RGB}{255,221,221}
+\definecolor{cp866}{RGB}{221,255,221}
+\definecolor{sbstarling}{RGB}{221,221,255}
+\definecolor{combining}{RGB}{255,0,0}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\author{Rob Verhoeven}
+\title{Accessing \Starling{} Databases}
+
+\maketitle
+
+\vfil
+
+\begin{abstract}
+This document contains information over the way information is stored in and can be extracted from \href{http://starling.rinet.ru/}{\Starling{} databases} (\fileext{dbf}). The information has been compiled using existing documentation on \dBaseIII{} databases and reverse engineering efforts by mainly \href{http://en.wikipedia.org/wiki/Andries_Brouwer}{\Brouwer}.
+\end{abstract}
+
+\vfil
+\begin{center}
+	\textbf{Document status}\\[1em]
+	\begin{tabular}{llp{.4\textwidth}}
+		\toprule
+		\thead{revision} & \thead{date} & \thead{reason for change}\\
+		\midrule
+		1.0 & 28--11--2013 & initial document release\\
+		1.1 & 18--02--2014 & update of special character table and addition of note on packing\\
+		\bottomrule
+	\end{tabular}
+\end{center}
+
+
+\clearpage
+\tableofcontents
+
+\clearpage
+
+\section{\Starling{}}
+\Starling{} is a tool for comparative linguists, which allows them to catalogue linguistic data in a flat database and apply a diverse range of procedures upon that data. The tool was created by Sergei Starostin, who passed away in~2005, and is currently maintained by his son George.\footnote{\url{http://starling.rinet.ru/}}
+
+Much credit goes to \Brouwer,\footnote{\url{http://www.win.tue.nl/~aeb/}} who, through personal correspondence, shared with me some of his code for extracting data from \Starling{} databases, allowing me to profit from his reverse engineering efforts on the database structure and encoding schemes.
+
+\section{Database header}
+\Starling{} databases (\fileext{dbf}) are in an adapted \dBaseIII{} database format. Going by the \dBaseIII{} header as documented on the \href{http://www.dbf2002.com/}{\DBFViewer{} website}\footnote{\url{http://www.dbf2002.com/dbf-file-format.html}}, the header format seems to be as follows:
+\newenvironment{values}{%
+	\def\val##1##2{\byte{##1} & ##2}
+	\small\begin{tabular}[t]{ll}%
+}{%
+	\end{tabular}%
+}
+\begin{center}
+	\begin{tabular}{rp{.7\textwidth}}
+		\toprule
+		\thead{bytes} & \thead{description}\\
+		\midrule
+		0 & \fileext{dbf} file type\newline
+			\begin{values}
+				\val{0x03}{\dBaseIII}\\
+			\end{values}\\
+		1 & Year of last update (offset from 1900)\\
+		2 & Month of last update\\
+		3 & Day of last update\\
+		4--7 & Number of data records\\
+		8--9 & Offset of first data record (i.e. header size (HDR))\\
+		10--11 & Record size (including delete flag)\\
+		12--27 & Reserved bytes (unknown content)\\
+		28 & Table bit flags (zero by default?)\newline
+			\begin{values}
+				\val{0x01}{has a database index (\fileext{cdx})}\\
+				\val{0x02}{has a memo field}\\
+				\val{0x04}{is a database container (\fileext{dbc})}\\
+			\end{values}\\
+		29 & Code page mark (zero by default)\\
+		30--31 & Reserved bytes (0 and~1 by default, respectively)\\
+		32--HDR & Record structure information (see \secref{sec:starlingrecordheader})\\
+		\bottomrule
+	\end{tabular}
+\end{center}
+
+\section{Records}
+To avoid complications, it is assumed that we are only dealing with packed databases, i.e.~databases on which the operation \menu{Pack} from the menu \menu{Assist} has been invoked. This avoids having to deal with fragmentation in \Starling's variable length fields (which are discussed in \secref{sec:var}).
+
+\subsection{Record header}\label{sec:starlingrecordheader}
+Record structure information is included in the \Starling{} database header, where each field is specified in a block of 32~bytes.
+\begin{center}
+	\begin{tabular}{rp{.7\textwidth}}
+		\toprule
+		\thead{bytes} & \thead{description}\\
+		\midrule
+		0--10 & Name (padded with null characters)\\
+		11 & Field type (\ASCII{})\newline
+			\begin{values}
+				\val{C}{character}\\
+				\val{Y}{currency}\\
+				\val{N}{numeric (can be a real number)}\\
+				\val{F}{float}\\
+				\val{D}{date}\\
+				\val{T}{datetime}\\
+				\val{B}{double}\\
+				\val{I}{integer}\\
+				\val{L}{logical}\\
+				\val{M}{memo}\\
+				\val{G}{general}\\
+				\val{P}{picture}\\
+			\end{values}\\
+		12--15 & Offset of the field, within the record.\newline (Do not trust this value.)\\
+		16 & Field length\\
+		17 & Number of decimal places\\
+		18 & Field bit flags\newline
+			\begin{values}
+				\val{0x01}{system field (invisible to user)}\\
+				\val{0x02}{nullable}\\
+				\val{0x04}{binary (for field types $C$ and $M$ only)}\\
+				%\val{0x0C}{autoincrementing}\\
+			\end{values}\\
+		%19--22 & Autoincrementing `next' value\\
+		%23 & Autoincrementing `step' value\\
+		19--31 & Reserved bytes\\
+		\bottomrule
+	\end{tabular}
+\end{center}
+
+\subsection{Record contents}
+Each records start with a `delete byte' with the following possible values.
+\begin{center}
+	\begin{values}
+		\toprule
+		\val{0x20}{normal record}\\
+		\val{0x2A}{deleted record}\\
+		\bottomrule
+	\end{values}
+\end{center}
+
+Numeric fields have their value stored in text (each digit is represented by its \ASCII{} encoded value).
+Furthermore, fields containing character data are padded with null characters ($0x00$).
+
+\section{References to associated \fileext{var} file}\label{sec:var}
+A \fileext{dbf} file is typically accompanied by a homonymous \fileext{var} file. Due to the way records are specified in \dBaseIII{}, a field (containing character data) has a maximum length of 255~characters. To accommodate longer texts, \Starling{} databases treat a character field with a length of 6~bytes as a reference to a chunk of data, stored within the associated \fileext{var} file.
+\begin{center}
+	\begin{tabular}{cl}
+	\toprule
+	\thead{bytes} & \thead{description}\\
+	\midrule
+		0--3 & data offset\\
+		4--5 & data length\\
+	\bottomrule
+	\end{tabular}
+\end{center}
+When a field that normally contains such a reference should instead be empty, its 6~bytes are all \ASCII{} encoded spaces (\byte{0x20}).
+
+\section{Character encodings}\label{sec:encoding}
+
+Stemming from a time before Unicode, \Starling{} works with its own character encoding. Unfortunately, this encoding is not straightforward. Much work has been done on reverse engineering this encoding by \Brouwer{} and the following information relies heavily on the information compiled on his website.\footnote{\url{http://www.win.tue.nl/~aeb/natlang/charsets/starling-charset.html}}\\
+
+Characters are encoded in either one or two bytes. By default, upcoming data is to be read in `single byte mode'. Byte flags are used to indicate when upcoming text is to be interpreted in `double byte mode' or when to return to `single byte mode'.
+\begin{center}
+	\begin{values}
+		\toprule
+		\val{0x01}{Enter `double byte mode'}\\
+		\val{0x7F}{Return to `single byte mode'}\\
+		\bottomrule
+	\end{values}
+\end{center}
+There are, however, complications. When in double byte mode, encountering a byte in the \ASCII{} range (below \byte{0x7F}) also indicates a return to single byte mode (with the exception of the \byte{0x01} flag for double byte mode). However, combining characters that are encoded in a single byte can seemingly occur in both single and double byte mode without affecting the mode.
+
+\subsection{Single byte mode}
+Among the byte values up to~\byte{0x1F} (the range for \ASCII{} control characters) are those for switching byte mode (see above). In addition to those, the following bytes have their own semantics:
+\begin{center}
+	\begin{values}
+		\toprule
+		\val{0x09}{Tab character.}\\
+		\val{0x0A}{Newline.}\\
+		\val{0x0D}{Occasionally follows a \byte{0x0A}, together forming one newline.}\\
+		\val{0x15}{New paragraph.}\\
+		\val{0x1D}{Marks the next byte as `special' (see below).}\\
+		\bottomrule
+	\end{values}
+\end{center}
+
+The characters encoded by the remainder of the code points (\byte{0x20}--\byte{0xFF}) is shown in \tblref{tbl:singlebyte}. The encoding is a customization of the Cyrillic code page \CP{}.
+
+In case a byte is marked as special, by a preceding byte \byte{0x1D}, the byte encodes the characters displayed in \tblref{tbl:specialsinglebyte}.
+
+\begin{landscape}
+\begin{charactertable}
+\verticalcenter{\resizebox{\linewidth}{!}{
+\begin{tabular}{rC{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}C{sb}}
+\hline
+ &\texttt{\_0}&\texttt{\_1}&\texttt{\_2}&\texttt{\_3}&\texttt{\_4}&\texttt{\_5}&\texttt{\_6}&\texttt{\_7}&\texttt{\_8}&\texttt{\_9}&\texttt{\_A}&\texttt{\_B}&\texttt{\_C}&\texttt{\_D}&\texttt{\_E}&\texttt{\_F}\\
+\hline
+\rowcolor{ascii}\texttt{2\_} & \unichar{32}{20}{\char"0020}{0020} & \unichar{33}{21}{\char"0021}{0021} & \unichar{34}{22}{\char"0022}{0022} & \unichar{35}{23}{\char"0023}{0023} & \unichar{36}{24}{\char"0024}{0024} & \unichar{37}{25}{\char"0025}{0025} & \unichar{38}{26}{\char"0026}{0026} & \unichar{39}{27}{\char"0027}{0027} & \unichar{40}{28}{\char"0028}{0028} & \unichar{41}{29}{\char"0029}{0029} & \unichar{42}{2A}{\char"002A}{002A} & \unichar{43}{2B}{\char"002B}{002B} & \unichar{44}{2C}{\char"002C}{002C} & \unichar{45}{2D}{\char"002D}{002D} & \unichar{46}{2E}{\char"002E}{002E} & \unichar{47}{2F}{\char"002F}{002F}\\
+\hline
+\rowcolor{ascii}\texttt{3\_} & \unichar{48}{30}{\char"0030}{0030} & \unichar{49}{31}{\char"0031}{0031} & \unichar{50}{32}{\char"0032}{0032} & \unichar{51}{33}{\char"0033}{0033} & \unichar{52}{34}{\char"0034}{0034} & \unichar{53}{35}{\char"0035}{0035} & \unichar{54}{36}{\char"0036}{0036} & \unichar{55}{37}{\char"0037}{0037} & \unichar{56}{38}{\char"0038}{0038} & \unichar{57}{39}{\char"0039}{0039} & \unichar{58}{3A}{\char"003A}{003A} & \unichar{59}{3B}{\char"003B}{003B} & \unichar{60}{3C}{\char"003C}{003C} & \unichar{61}{3D}{\char"003D}{003D} & \unichar{62}{3E}{\char"003E}{003E} & \unichar{63}{3F}{\char"003F}{003F}\\
+\hline
+\rowcolor{ascii}\texttt{4\_} & \unichar{64}{40}{\char"0040}{0040} & \unichar{65}{41}{\char"0041}{0041} & \unichar{66}{42}{\char"0042}{0042} & \unichar{67}{43}{\char"0043}{0043} & \unichar{68}{44}{\char"0044}{0044} & \unichar{69}{45}{\char"0045}{0045} & \unichar{70}{46}{\char"0046}{0046} & \unichar{71}{47}{\char"0047}{0047} & \unichar{72}{48}{\char"0048}{0048} & \unichar{73}{49}{\char"0049}{0049} & \unichar{74}{4A}{\char"004A}{004A} & \unichar{75}{4B}{\char"004B}{004B} & \unichar{76}{4C}{\char"004C}{004C} & \unichar{77}{4D}{\char"004D}{004D} & \unichar{78}{4E}{\char"004E}{004E} & \unichar{79}{4F}{\char"004F}{004F}\\
+\hline
+\rowcolor{ascii}\texttt{5\_} & \unichar{80}{50}{\char"0050}{0050} & \unichar{81}{51}{\char"0051}{0051} & \unichar{82}{52}{\char"0052}{0052} & \unichar{83}{53}{\char"0053}{0053} & \unichar{84}{54}{\char"0054}{0054} & \unichar{85}{55}{\char"0055}{0055} & \unichar{86}{56}{\char"0056}{0056} & \unichar{87}{57}{\char"0057}{0057} & \unichar{88}{58}{\char"0058}{0058} & \unichar{89}{59}{\char"0059}{0059} & \unichar{90}{5A}{\char"005A}{005A} & \unichar{91}{5B}{\char"005B}{005B} & \unichar{92}{5C}{\char"005C}{005C} & \unichar{93}{5D}{\char"005D}{005D} & \unichar{94}{5E}{\combining{\char"0302}}{0302} & \unichar{95}{5F}{\char"005F}{005F}\\
+\hline
+\rowcolor{ascii}\texttt{6\_} & \unichar{96}{60}{\char"0060}{0060} & \unichar{97}{61}{\char"0061}{0061} & \unichar{98}{62}{\char"0062}{0062} & \unichar{99}{63}{\char"0063}{0063} & \unichar{100}{64}{\char"0064}{0064} & \unichar{101}{65}{\char"0065}{0065} & \unichar{102}{66}{\char"0066}{0066} & \unichar{103}{67}{\char"0067}{0067} & \unichar{104}{68}{\char"0068}{0068} & \unichar{105}{69}{\char"0069}{0069} & \unichar{106}{6A}{\char"006A}{006A} & \unichar{107}{6B}{\char"006B}{006B} & \unichar{108}{6C}{\char"006C}{006C} & \unichar{109}{6D}{\char"006D}{006D} & \unichar{110}{6E}{\char"006E}{006E} & \unichar{111}{6F}{\char"006F}{006F}\\
+\hline
+\rowcolor{ascii}\texttt{7\_} & \unichar{112}{70}{\char"0070}{0070} & \unichar{113}{71}{\char"0071}{0071} & \unichar{114}{72}{\char"0072}{0072} & \unichar{115}{73}{\char"0073}{0073} & \unichar{116}{74}{\char"0074}{0074} & \unichar{117}{75}{\char"0075}{0075} & \unichar{118}{76}{\char"0076}{0076} & \unichar{119}{77}{\char"0077}{0077} & \unichar{120}{78}{\char"0078}{0078} & \unichar{121}{79}{\char"0079}{0079} & \unichar{122}{7A}{\char"007A}{007A} & \unichar{123}{7B}{\char"007B}{007B} & \unichar{124}{7C}{\char"007C}{007C} & \unichar{125}{7D}{\char"007D}{007D} & \unichar{126}{7E}{\combining{\char"0303}}{0303} & \missingchar{}\\
+\hline
+\rowcolor{cp866}\texttt{8\_} & \unichar{128}{80}{\char"0410}{0410} & \unichar{129}{81}{\char"0411}{0411} & \unichar{130}{82}{\char"0412}{0412} & \unichar{131}{83}{\char"0413}{0413} & \unichar{132}{84}{\char"0414}{0414} & \unichar{133}{85}{\char"0415}{0415} & \unichar{134}{86}{\char"0416}{0416} & \unichar{135}{87}{\char"0417}{0417} & \unichar{136}{88}{\char"0418}{0418} & \unichar{137}{89}{\char"0419}{0419} & \unichar{138}{8A}{\char"041A}{041A} & \unichar{139}{8B}{\char"041B}{041B} & \unichar{140}{8C}{\char"041C}{041C} & \unichar{141}{8D}{\char"041D}{041D} & \unichar{142}{8E}{\char"041E}{041E} & \unichar{143}{8F}{\char"041F}{041F}\\
+\hline
+\rowcolor{cp866}\texttt{9\_} & \unichar{144}{90}{\char"0420}{0420} & \unichar{145}{91}{\char"0421}{0421} & \unichar{146}{92}{\char"0422}{0422} & \unichar{147}{93}{\char"0423}{0423} & \unichar{148}{94}{\char"0424}{0424} & \unichar{149}{95}{\char"0425}{0425} & \unichar{150}{96}{\char"0426}{0426} & \unichar{151}{97}{\char"0427}{0427} & \unichar{152}{98}{\char"0428}{0428} & \unichar{153}{99}{\char"0429}{0429} & \unichar{154}{9A}{\char"042A}{042A} & \unichar{155}{9B}{\char"042B}{042B} & \unichar{156}{9C}{\char"042C}{042C} & \unichar{157}{9D}{\char"042D}{042D} & \unichar{158}{9E}{\char"042E}{042E} & \unichar{159}{9F}{\char"042F}{042F}\\
+\hline
+\rowcolor{cp866}\texttt{A\_} & \unichar{160}{A0}{\char"0430}{0430} & \unichar{161}{A1}{\char"0431}{0431} & \unichar{162}{A2}{\char"0432}{0432} & \unichar{163}{A3}{\char"0433}{0433} & \unichar{164}{A4}{\char"0434}{0434} & \unichar{165}{A5}{\char"0435}{0435} & \unichar{166}{A6}{\char"0436}{0436} & \unichar{167}{A7}{\char"0437}{0437} & \unichar{168}{A8}{\char"0438}{0438} & \unichar{169}{A9}{\char"0439}{0439} & \unichar{170}{AA}{\char"043A}{043A} & \unichar{171}{AB}{\char"043B}{043B} & \unichar{172}{AC}{\char"043C}{043C} & \unichar{173}{AD}{\char"043D}{043D} & \unichar{174}{AE}{\char"043E}{043E} & \unichar{175}{AF}{\char"043F}{043F}\\
+\hline
+\rowcolor{sbstarling}\texttt{B\_} & \unichar{176}{B0}{\char"0101}{0101} & \unichar{177}{B1}{\combining{\char"0301}}{0301} & \unichar{178}{B2}{\char"00E4}{00E4} & \unichar{179}{B3}{\combining{\char"0328}}{0328} & \unichar{180}{B4}{\char"01DF}{01DF} & \unichar{181}{B5}{\char"0063\char"0323}{0063 0323} & \unichar{182}{B6}{\char"010D}{010D} & \unichar{183}{B7}{\char"010D\char"0323}{010D 0323} & \unichar{184}{B8}{\char"03B4}{03B4} & \unichar{185}{B9}{\char"0113}{0113} & \missingchar{} & \unichar{187}{BB}{\combining{\char"0307}}{0307} & \unichar{188}{BC}{\combining{\char"0308}}{0308} & \unichar{189}{BD}{\char"025B}{025B} & \unichar{190}{BE}{\char"02A1}{02A1} & \unichar{191}{BF}{\combining{\char"032F}}{032F}\\
+\hline
+\rowcolor{sbstarling}\texttt{C\_} & \unichar{192}{C0}{\char"00E7}{00E7} & \unichar{193}{C1}{\char"0263}{0263} & \unichar{194}{C2}{\char"0281}{0281} & \unichar{195}{C3}{\char"0127}{0127} & \unichar{196}{C4}{\combining{\char"0304}}{0304} & \unichar{197}{C5}{\char"012B}{012B} & \unichar{198}{C6}{\char"0268}{0268} & \unichar{199}{C7}{\char"0268\char"0304}{0268 0304} & \unichar{200}{C8}{\combining{\char"030A}}{030A} & \unichar{201}{C9}{\combining{\char"0325}}{0325} & \unichar{202}{CA}{\char"1E33}{1E33} & \unichar{203}{CB}{\char"028E}{028E} & \unichar{204}{CC}{\char"019B}{019B} & \unichar{205}{CD}{\char"002D}{002D} & \unichar{206}{CE}{\char"019B\char"0323}{019B 0323} & \unichar{207}{CF}{\char"026B}{026B}\\
+\hline
+\rowcolor{sbstarling}\texttt{D\_} & \unichar{208}{D0}{\char"2C62}{2C62} & \unichar{209}{D1}{\char"014B}{014B} & \unichar{210}{D2}{\char"014D}{014D} & \unichar{211}{D3}{\char"00F6}{00F6} & \unichar{212}{D4}{\char"022B}{022B} & \unichar{213}{D5}{\char"0254}{0254} & \unichar{214}{D6}{\char"0254\char"0304}{0254 0304} & \unichar{215}{D7}{\char"1E57}{1E57} & \unichar{216}{D8}{\char"0071\char"0307}{0071 0307} & \unichar{217}{D9}{\char"00DF}{00DF} & \unichar{218}{DA}{\char"007E}{007E} & \unichar{219}{DB}{\combining{\char"0300}}{0300} & \unichar{220}{DC}{\combining{\char"0323}}{0323} & \unichar{221}{DD}{\char"0161}{0161} & \unichar{222}{DE}{\char"1E6D}{1E6D} & \unichar{223}{DF}{\combining{\char"0306}}{0306}\\
+\hline
+\rowcolor{cp866}\texttt{E\_} & \unichar{224}{E0}{\char"0440}{0440} & \unichar{225}{E1}{\char"0441}{0441} & \unichar{226}{E2}{\char"0442}{0442} & \unichar{227}{E3}{\char"0443}{0443} & \unichar{228}{E4}{\char"0444}{0444} & \unichar{229}{E5}{\char"0445}{0445} & \unichar{230}{E6}{\char"0446}{0446} & \unichar{231}{E7}{\char"0447}{0447} & \unichar{232}{E8}{\char"0448}{0448} & \unichar{233}{E9}{\char"0449}{0449} & \unichar{234}{EA}{\char"044A}{044A} & \unichar{235}{EB}{\char"044B}{044B} & \unichar{236}{EC}{\char"044C}{044C} & \unichar{237}{ED}{\char"044D}{044D} & \unichar{238}{EE}{\char"044E}{044E} & \unichar{239}{EF}{\char"044F}{044F}\\
+\hline
+\rowcolor{sbstarling}\texttt{F\_} & \unichar{240}{F0}{\char"03D1}{03D1} & \unichar{241}{F1}{\char"016B}{016B} & \unichar{242}{F2}{\char"00FC}{00FC} & \unichar{243}{F3}{\char"01D6}{01D6} & \unichar{244}{F4}{\char"0259}{0259} & \unichar{245}{F5}{\char"0259\char"0304}{0259 0304} & \unichar{246}{F6}{\combining{\char"030C}}{030C} & \unichar{247}{F7}{\char"02B7}{02B7} & \unichar{248}{F8}{\char"0266}{0266} & \unichar{249}{F9}{\char"03C7}{03C7} & \unichar{250}{FA}{\char"0292}{0292} & \unichar{251}{FB}{\char"01EF}{01EF} & \unichar{252}{FC}{\char"017E}{017E} & \unichar{253}{FD}{\char"0294}{0294} & \unichar{254}{FE}{\char"0295}{0295} & \unichar{255}{FF}{\char"028C}{028C}\\
+\hline
+\end{tabular}
+}
+\caption{\label{tbl:singlebyte}The range of characters encoded by a single byte, each along with their Unicode code point(s). A red background denotes the \ASCII{} code space, a green background denotes a character from the \CP{} code page, and a blue background denotes characters from the custom \Starling{} encoding. Red characters indicate combining characters.}
+}
+\end{charactertable}
+\end{landscape}
+
+\begin{charactertable}
+
+\begin{tabular}{rC{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}C{sbs}}
+\hline
+ &\texttt{\_0}&\texttt{\_1}&\texttt{\_2}&\texttt{\_3}&\texttt{\_4}&\texttt{\_5}&\texttt{\_6}&\texttt{\_7}&\texttt{\_8}&\texttt{\_9}&\texttt{\_A}&\texttt{\_B}&\texttt{\_C}&\texttt{\_D}&\texttt{\_E}&\texttt{\_F}\\
+\hline
+\texttt{4\_} & \missingchar{} & \unichar{65}{41}{\char"04D4}{04D4} & \missingchar{} & \missingchar{} & \unichar{68}{44}{\char"0111}{0111} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{76}{4C}{\char"026C}{026C} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{5\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{84}{54}{\char"0167}{0167} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{94}{5E}{\combining{\char"0311}}{0311} & \missingchar{}\\
+\hline
+\texttt{6\_} & \missingchar{} & \unichar{97}{61}{\char"00E6}{00E6} & \unichar{98}{62}{\char"0180}{0180} & \unichar{99}{63}{\char"0255}{0255} & \unichar{100}{64}{\char"00F0}{00F0} & \unichar{101}{65}{\char"0153}{0153} & \missingchar{} & \unichar{103}{67}{\char"01E5}{01E5} & \unichar{104}{68}{\char"1E2B}{1E2B} & \unichar{105}{69}{\char"0131}{0131} & \unichar{106}{6A}{\char"0237}{0237} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{111}{6F}{\char"00F8}{00F8}\\
+\hline
+\texttt{7\_} & \missingchar{} & \missingchar{} & \unichar{114}{72}{\char"027E}{027E} & \unichar{115}{73}{\char"0283}{0283} & \unichar{116}{74}{\char"00FE}{00FE} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{120}{78}{\char"1D9A}{1D9A} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{8\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{9\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{A\_} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{163}{A3}{\char"0260}{0260} & \missingchar{} & \unichar{165}{A5}{\char"0467}{0467} & \missingchar{} & \unichar{167}{A7}{\char"0455}{0455} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{171}{AB}{\char"0459}{0459} & \missingchar{} & \unichar{173}{AD}{\char"045A}{045A} & \unichar{174}{AE}{\char"046B}{046B} & \missingchar{}\\
+\hline
+\texttt{B\_} & \missingchar{} & \unichar{177}{B1}{\combining{\char"030B}}{030B} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{191}{BF}{\combining{\char"032E}}{032E}\\
+\hline
+\texttt{C\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{D\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{219}{DB}{\combining{\char"030F}}{030F} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{E\_} & \unichar{224}{E0}{\char"0281}{0281} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{237}{ED}{\char"0454}{0454} & \missingchar{} & \unichar{239}{EF}{\char"017E}{017E}\\
+\hline
+\texttt{F\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{248}{F8}{\char"0195}{0195} & \missingchar{} & \unichar{250}{FA}{\char"0452}{0452} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\end{tabular}
+\caption{\label{tbl:specialsinglebyte} Characters encoded by a `special' byte in single byte mode.}
+\end{charactertable}
+
+\subsection{Double byte mode}
+A sequence of two bytes encodes a character using the Chinese \href{http://en.wikipedia.org/wiki/Big5}{Big5} encoding,\footnote{Cf.~Microsoft's code page~950.} of which the first byte always has a value greater than \byte{0x7F}. \Starling{} makes use of code points in the space reserved for user-defined characters (\byte{0x81}--\byte{0xA0}) for its own character encoding. The following provides an overview of \Starling{}'s user defined characters.\\
+\begin{center}
+\begin{tabular}{ccl}
+	\toprule
+	\thead{1st byte} & \thead{2nd byte} & \thead{character}\\
+	\midrule
+	\byte{0x83} & \multicolumn{2}{c}{\itshape(refer to \tblref{tbl:grk83})}\\
+	\midrule
+	\byte{0x85} & \byte{0xAF} & {\Greek\char"03DD} (U+03DD)\\
+	\midrule
+	\byte{0x87} & \multicolumn{2}{c}{\itshape(refer to \tblref{tbl:ocs87})}\\
+	\midrule
+	\byte{0x88} & \byte{0x81} & {\OCS\char"0475} (U+0475)\\
+			  & \byte{0x83} & {\OCS\char"0467} (U+0467)\\
+	\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{landscape}
+\begin{charactertable}
+\renewcommand{\EncodingFont}{\Greek}
+\let\oldcombining\combining
+\renewcommand{\combining}[1]{\oldcombining[α]{#1}}
+\verticalcenter{\resizebox{\linewidth}{!}{
+\begin{tabular}{rC{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}C{gr}}
+\hline
+ &\texttt{\_0}&\texttt{\_1}&\texttt{\_2}&\texttt{\_3}&\texttt{\_4}&\texttt{\_5}&\texttt{\_6}&\texttt{\_7}&\texttt{\_8}&\texttt{\_9}&\texttt{\_A}&\texttt{\_B}&\texttt{\_C}&\texttt{\_D}&\texttt{\_E}&\texttt{\_F}\\
+\hline
+\texttt{9\_} & \unichar{144}{90}{\combining{\char"0344}}{0344} & \unichar{145}{91}{\combining{\char"0314\char"0301}}{0314 0301} & \unichar{146}{92}{\combining{\char"0313\char"0301}}{0313 0301} & \unichar{147}{93}{\combining{\char"0301}}{0301} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{154}{9A}{\combining{\char"0308\char"0300}}{0308 0300} & \unichar{155}{9B}{\combining{\char"0314\char"0300}}{0314 0300} & \unichar{156}{9C}{\combining{\char"0313\char"0300}}{0313 0300} & \unichar{157}{9D}{\combining{\char"0314\char"0342}}{0314 0342} & \unichar{158}{9E}{\char"0387}{0387} & \missingchar{}\\
+\hline
+\texttt{A\_} & \unichar{160}{A0}{\combining{\char"0314}}{0314} & \unichar{161}{A1}{\combining{\char"0313}}{0313} & \missingchar{} & \unichar{163}{A3}{\combining{\char"0308}}{0308} & \unichar{164}{A4}{\char"0391}{0391} & \unichar{165}{A5}{\char"0392}{0392} & \unichar{166}{A6}{\char"03A7}{03A7} & \unichar{167}{A7}{\char"0394}{0394} & \unichar{168}{A8}{\char"0395}{0395} & \unichar{169}{A9}{\char"03A6}{03A6} & \unichar{170}{AA}{\char"0393}{0393} & \unichar{171}{AB}{\char"0397}{0397} & \unichar{172}{AC}{\char"0399}{0399} & \unichar{173}{AD}{\char"1FF3}{1FF3} & \unichar{174}{AE}{\char"039A}{039A} & \unichar{175}{AF}{\char"039B}{039B}\\
+\hline
+\texttt{B\_} & \unichar{176}{B0}{\char"039C}{039C} & \unichar{177}{B1}{\char"039D}{039D} & \unichar{178}{B2}{\char"039F}{039F} & \unichar{179}{B3}{\char"03A0}{03A0} & \unichar{180}{B4}{\char"0398}{0398} & \unichar{181}{B5}{\char"03A1}{03A1} & \unichar{182}{B6}{\char"03A3}{03A3} & \unichar{183}{B7}{\char"03A4}{03A4} & \unichar{184}{B8}{\char"03A5}{03A5} & \unichar{185}{B9}{\char"1FC3}{1FC3} & \unichar{186}{BA}{\char"03A9}{03A9} & \unichar{187}{BB}{\char"039E}{039E} & \unichar{188}{BC}{\char"03A8}{03A8} & \unichar{189}{BD}{\char"0396}{0396} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{C\_} & \unichar{192}{C0}{\combining{\char"0313\char"0342}}{0313 0342} & \unichar{193}{C1}{\combining{\char"0300}}{0300} & \unichar{194}{C2}{\char"03B1}{03B1} & \unichar{195}{C3}{\char"03B2}{03B2} & \unichar{196}{C4}{\char"03C7}{03C7} & \unichar{197}{C5}{\char"03B4}{03B4} & \unichar{198}{C6}{\char"03B5}{03B5} & \unichar{199}{C7}{\char"03C6}{03C6} & \unichar{200}{C8}{\char"03B3}{03B3} & \unichar{201}{C9}{\char"03B7}{03B7} & \unichar{202}{CA}{\char"03B9}{03B9} & \unichar{203}{CB}{\char"03C2}{03C2} & \unichar{204}{CC}{\char"03BA}{03BA} & \unichar{205}{CD}{\char"03BB}{03BB} & \unichar{206}{CE}{\char"03BC}{03BC} & \unichar{207}{CF}{\char"03BD}{03BD}\\
+\hline
+\texttt{D\_} & \unichar{208}{D0}{\char"03BF}{03BF} & \unichar{209}{D1}{\char"03C0}{03C0} & \unichar{210}{D2}{\char"03B8}{03B8} & \unichar{211}{D3}{\char"03C1}{03C1} & \unichar{212}{D4}{\char"03C3}{03C3} & \unichar{213}{D5}{\char"03C4}{03C4} & \unichar{214}{D6}{\char"03C5}{03C5} & \unichar{215}{D7}{\char"1FB3}{1FB3} & \unichar{216}{D8}{\char"03C9}{03C9} & \unichar{217}{D9}{\char"03BE}{03BE} & \unichar{218}{DA}{\char"03C8}{03C8} & \unichar{219}{DB}{\char"03B6}{03B6} & \unichar{220}{DC}{\combining{\char"0342}}{0342} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\end{tabular}
+}
+\caption{\label{tbl:grk83} The Greek characters encoded by the second byte in double byte mode, when the first byte is~\byte{0x83}. The `{\Greek α}' that is present with the combining characters (shown in red) is merely there for reference.}
+}
+\end{charactertable}
+\end{landscape}
+
+
+\begin{landscape}
+\begin{charactertable}
+\renewcommand{\EncodingFont}{\OCS}
+\verticalcenter{\resizebox{\linewidth}{!}{
+\begin{tabular}{rC{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}C{ocs}}
+\hline
+ &\texttt{\_0}&\texttt{\_1}&\texttt{\_2}&\texttt{\_3}&\texttt{\_4}&\texttt{\_5}&\texttt{\_6}&\texttt{\_7}&\texttt{\_8}&\texttt{\_9}&\texttt{\_A}&\texttt{\_B}&\texttt{\_C}&\texttt{\_D}&\texttt{\_E}&\texttt{\_F}\\
+\hline
+\texttt{8\_} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{131}{83}{\char"0433\char"0311}{0433 0311} & \unichar{132}{84}{\char"0431}{0431} & \missingchar{} & \unichar{134}{86}{\char"044E}{044E} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{9\_} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{147}{93}{\char"0436}{0436} & \missingchar{} & \missingchar{} & \unichar{150}{96}{\char"042E}{042E} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{154}{9A}{\char"0418}{0418} & \unichar{155}{9B}{\char"0421}{0421} & \missingchar{} & \missingchar{} & \unichar{158}{9E}{\char"0410}{0410} & \unichar{159}{9F}{\char"041F}{041F}\\
+\hline
+\texttt{A\_} & \unichar{160}{A0}{\char"0420}{0420} & \missingchar{} & \unichar{162}{A2}{\char"041E}{041E} & \unichar{163}{A3}{\char"041B}{041B} & \unichar{164}{A4}{\char"0414}{0414} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{168}{A8}{\char"0417}{0417} & \missingchar{} & \unichar{170}{AA}{\char"041A}{041A} & \missingchar{} & \unichar{172}{AC}{\char"0415}{0415} & \unichar{173}{AD}{\char"0413}{0413} & \unichar{174}{AE}{\char"041C}{041C} & \missingchar{}\\
+\hline
+\texttt{B\_} & \missingchar{} & \unichar{177}{B1}{\char"041D}{041D} & \missingchar{} & \unichar{179}{B3}{\char"0445}{0445} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{184}{B8}{\char"044A}{044A} & \unichar{185}{B9}{\char"0444}{0444} & \unichar{186}{BA}{\char"0438}{0438} & \unichar{187}{BB}{\char"0441}{0441} & \unichar{188}{BC}{\char"0432}{0432} & \unichar{189}{BD}{\char"0443}{0443} & \unichar{190}{BE}{\char"0430}{0430} & \unichar{191}{BF}{\char"043F}{043F}\\
+\hline
+\texttt{C\_} & \unichar{192}{C0}{\char"0440}{0440} & \unichar{193}{C1}{\char"0448}{0448} & \unichar{194}{C2}{\char"043E}{043E} & \unichar{195}{C3}{\char"043B}{043B} & \unichar{196}{C4}{\char"0434}{0434} & \unichar{197}{C5}{\char"044C}{044C} & \unichar{198}{C6}{\char"0442}{0442} & \missingchar{} & \unichar{200}{C8}{\char"0437}{0437} & \missingchar{} & \unichar{202}{CA}{\char"043A}{043A} & \unichar{203}{CB}{\char"044B}{044B} & \unichar{204}{CC}{\char"0435}{0435} & \unichar{205}{CD}{\char"0433}{0433} & \unichar{206}{CE}{\char"043C}{043C} & \unichar{207}{CF}{\char"0446}{0446}\\
+\hline
+\texttt{D\_} & \unichar{208}{D0}{\char"0447}{0447} & \unichar{209}{D1}{\char"043D}{043D} & \unichar{210}{D2}{\char"044F}{044F} & \unichar{211}{D3}{\char"0425}{0425} & \missingchar{} & \unichar{213}{D5}{\char"0463}{0463} & \missingchar{} & \missingchar{} & \unichar{216}{D8}{\char"A657}{A657} & \missingchar{} & \unichar{218}{DA}{\char"0467}{0467} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{E\_} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \unichar{231}{E7}{\char"046B}{046B} & \unichar{232}{E8}{\char"0415}{0415} & \unichar{233}{E9}{\char"0065}{0065} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\texttt{F\_} & \missingchar{} & \missingchar{} & \unichar{242}{F2}{\char"0461}{0461} & \unichar{243}{F3}{\char"046C}{046C} & \unichar{244}{F4}{\char"046D}{046D} & \unichar{245}{F5}{\char"0464}{0464} & \unichar{246}{F6}{\char"0465}{0465} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{} & \missingchar{}\\
+\hline
+\end{tabular}
+}
+\caption{\label{tbl:ocs87} The Cyrillic characters encoded by the second byte in double byte mode, when the first byte is~\byte{0x87}.}
+}
+\end{charactertable}
+\end{landscape}
+
+
+
+\section{Layout codes}
+\Starling{} allows character data to be formatted. For this, it uses layout tags that are inserted into the character data. These tags are the following:
+\newcommand{\starcode}[1]{\mbox{\texttt{\textbackslash#1}}}
+\newcommand{\startag}[2]{\starcode{#1}\dots\starcode{#2}}
+\begin{center}
+	\begin{tabular}{ll}
+		\toprule
+		\thead{tag} & \thead{formatting style}\\
+		\midrule
+		\startag{B}{b} & bold text\\
+		\startag{I}{i} & italic text\\
+		\startag{U}{u} & underline text\\
+		\startag{H}{h} & superscript text\\
+		\startag{L}{l} & subscript text\\
+		\startag{C}{c} & condensed text\\
+		\bottomrule
+	\end{tabular}
+\end{center}
+
+In addition to these layout tags, there are also tags that produce links. The exact format of these links is somewhat unclear, but seems to be as follows:
+\begin{center}
+	\begin{tabular}{lp{.4\textwidth}}
+		\toprule
+		\thead{tag} & \thead{formatting style}\\
+		\midrule
+		\startag{X0}{x} & Link to an entry containing the tagged text. The text itself also makes up the clickable link. (Perhaps the number~0 is variable and refers to the column number.)\\
+		%\startag{X$n$}{x} & Link to column $n$, entry \dots\\
+		\startag{X<0.$n$>}{x} & The clickable link is again the text between the tags, but the target is now entry~$n$. (Perhaps the number~0 is variable and is an index to a list of different databases.)\\
+		\bottomrule
+	\end{tabular}
+\end{center}
+
+\Starling{} does not enforce the contents of a cell to have correctly nested tags. Even closing tags without a preceding opening tag can occur.
+
+\section{Auxiliary files}
+A \Starling{} database file (\fileext{dbf}) can be accompanied by multiple homonymous files with a different extension. One of these is the \fileext{var} file, already mentioned in \secref{sec:var}, but beside that one, there can also be an \fileext{inf} file and/or a \fileext{prt} file.
+
+\subsection{\fileext{inf} file}
+This is a file containing metadata for the database, such as multilingual aliases for the field names (because they can only be at most 10 characters long) or additional information describing the contents of the database.
+The file is encoded in the same \Starling{} encoding as set forth in \secref{sec:encoding}.
+
+\subsection{\fileext{prt} file}
+This file contains settings for the \Starling{} print functionality, such as column delineators etc. It is itself a \Starling{} database.
+
+\end{document}
